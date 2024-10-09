@@ -2,7 +2,7 @@ package lexer;
 
 public class Token {
 
-    private String name;     // questo è un identificativo di token: potrebbe anche essere un intero
+    private String name; // questo è un identificativo di token: potrebbe anche essere un intero
     private String attribute;
 
     public Token(String name, String attribute){

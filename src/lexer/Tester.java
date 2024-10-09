@@ -2,6 +2,7 @@ package lexer;
 
 public class Tester {
 
+    //TODO: Il file sorgente deve essere preso in input come parametro
     public static void main(String[] args) {
 
         Lexer lexer = new Lexer();
