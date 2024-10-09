@@ -1,18 +1,13 @@
 package lexer;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.PushbackReader;
+import java.io.*;
 import java.util.HashMap;
-import java.util.Hashtable;
 
 public class Lexer {
-    private File input;
+    private FileInputStream fileInput;
     private HashMap<String, Token> stringTable;
     private static HashMap<String, Token> keywordTable;
     private int state;
-    private PushbackReader reader;
 
     public Lexer() {
         stringTable = new HashMap<>();
@@ -31,87 +26,106 @@ public class Lexer {
     }
 
     public Boolean initialize(String filePath){
-        input = new File(filePath);
-        try{
-            reader = new PushbackReader(new FileReader(filePath), 1);
-        }catch (Exception e){
-            //TODO migliorare gestione errori
-            System.out.println("Errore Apertura file" + e);
+        try {
+            fileInput = new FileInputStream(filePath);
+            return true;
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
             return false;
         }
-        return true;
     }
 
+    //TODO: Bisogna gestire anche i separatori (fare riferimento alla tabella)
     public Token nextToken() throws Exception {
         state = 0;
-        String lexem = "";
+        StringBuilder lexeme = new StringBuilder();
         char c;
         int intCharacter;
 
         while(true){
-            intCharacter = reader.read();
+            intCharacter = fileInput.read();
+
+            // End Of File
             if(intCharacter == -1){
-                throw new Exception("File Terminato");
-            }
-            else{
+                // Check if there's a token in progress and return it
+                switch (state) {
+                    case 4: // State for identifiers
+                        return installID(lexeme.toString());
+                    case 7: // State for integer numbers
+                    case 9: // State for decimal numbers (after a dot)
+                    case 12: // State for numbers (after exponent)
+                        return new Token("NUM", lexeme.toString());
+                    case 15: // State for operator '<'
+                        return new Token("RELOP", "LT");
+                    case 18: // State for operator '<='
+                        return new Token("RELOP", "LE");
+                    case 21: // State for operator '=='
+                        return new Token("RELOP", "EQ");
+                    case 23: // State for operator '!='
+                        return new Token("RELOP", "NE");
+                    case 25: // State for operator '>='
+                        return new Token("RELOP", "GE");
+                    case 26: // State for operator '>'
+                        return new Token("RELOP", "GT");
+                    default:
+                        return null; // If no token is in progress, return null for EOF
+                }
+            } else{
                 c = (char) intCharacter;
             }
 
-
+            //############################### WHITESPACES #############################
             switch(state){
                 case 0:
                     if(Character.isWhitespace(c)){
                         state = 1;
-                    }
-                    else{
+                    } else{
                         state = 3;
                     }
                     break;
                 case 1:
                     if(Character.isWhitespace(c)){
                         state = 1;
-                        break;
-                    }
-                    else{
-                        state = 2;
+                    } else{
+                        state = 0;
                         retrack();
-                        continue;
+                        continue; //Consume all whitespaces
                     }
+                    break;
             }
+            //#########################################################################
 
-            //ID
+            //############################# ID ########################################
             switch(state){
                 case 3:
                     if(Character.isLetter(c) || c=='_') {
                         state = 4;
-                        lexem += c;
-                    }
-                    else{
+                        lexeme.append(c);
+                    } else{
                         state = 6;
                     }
                     break;
 
                 case 4:
-                    if(Character.isLetter(c) || c=='_' || Character.isDigit(c)) {
+                    if(Character.isLetterOrDigit(c) || c=='_') {
                         state = 4;
-                        lexem += c;
-                    }
-                    else {
+                        lexeme.append(c);
+                    } else {
                         state = 5;
                         retrack();
-                        return installID(lexem);
+                        return installID(lexeme.toString());
                     }
                     break;
             }
+            //###########################################################################
 
-            // Number
+            //################################## NUMBERS ################################
             switch (state){
                 case 6:
                     if(Character.isDigit(c)){
                         state = 7;
-                        lexem += c;
-                    }
-                    else {
+                        lexeme.append(c);
+                    } else {
                         state = 14;
                     }
                     break;
@@ -119,32 +133,164 @@ public class Lexer {
                 case 7:
                     if(Character.isDigit(c)){
                         state = 7;
-                        lexem += c;
+                        lexeme.append(c);
+                    } else if(c == '.'){
+                        state = 8;
+                        lexeme.append(c);
+                    } else {
+                        state = 13;
+                        retrack();
+                        return new Token ("NUM", lexeme.toString());
                     }
-                    else {
-                        return new Token ("NUM", lexem);
+                    break;
+
+                case 8:
+                    if(Character.isDigit(c)){
+                        state = 9;
+                        lexeme.append(c);
+                    } else {
+                        throw new Exception("Error: Token not recognized!");
+                    }
+                    break;
+
+                case 9:
+                    if(Character.isDigit(c)){
+                        state = 9;
+                        lexeme.append(c);
+                    } else if(c == 'E'){
+                        state = 10;
+                        lexeme.append(c);
+                    } else {
+                        state = 13;
+                        retrack();
+                        return new Token("NUM", lexeme.toString());
+                    }
+                    break;
+
+                case 10:
+                    if(c == '+' || c=='-'){
+                        state = 11;
+                        lexeme.append(c);
+                    } else {
+                        throw new Exception("Error: Token not recognized!");
+                    }
+                    break;
+
+                case 11:
+                    if(Character.isDigit(c)){
+                        state = 12;
+                        lexeme.append(c);
+                    } else {
+                        throw new Exception("Error: Token not recognized!");
+                    }
+                    break;
+
+                case 12:
+                    if(Character.isDigit(c)){
+                        state = 12;
+                        lexeme.append(c);
+                    } else {
+                        state = 13;
+                        retrack();
+                        return new Token("NUM", lexeme.toString());
                     }
                     break;
             }
+            //####################################################################################
 
-            return new Token("ERROR");
+            //################################## OPERATORS #######################################
+            switch(state){
+                case 14:
+                    if(c == '<'){
+                        state = 15;
+                        lexeme.append(c);
+                    } else if(c == '='){
+                        state = 20;
+                        lexeme.append(c);
+                    } else if (c == '!') {
+                        state = 22;
+                        lexeme.append(c);
+                    } else if (c == '>') {
+                        state = 24;
+                        lexeme.append(c);
+                    }else{
+                        // There are no more Pattern to match
+                        throw new Exception("Error: Token not recognized!");
+                    }
+                    break;
 
+                case 15:
+                    if(c == '-'){
+                        state = 16;
+                        lexeme.append(c);
+                    }else if (c == '='){
+                        state = 18;
+                        lexeme.append(c);
+                        return new Token("RELOP", "LE");
+                    }else{
+                        state = 19;
+                        retrack();
+                        return new Token("RELOP", "LT");
+                    }
+                    break;
+
+                case 16:
+                    if(c == '-'){
+                        state = 17;
+                        lexeme.append(c);
+                        return new Token("ASSIGN");
+                    }else {
+                        throw new Exception("Error: Token not recognized!");
+                    }
+
+                case 20:
+                    if(c == '='){
+                        state = 21;
+                        lexeme.append(c);
+                        return new Token("RELOP", "EQ");
+                    }else{
+                        throw new Exception("Error: Token not recognized!");
+                    }
+
+                case 22:
+                    if(c == '='){
+                        state = 23;
+                        lexeme.append(c);
+                        return new Token("RELOP", "NE");
+                    }else{
+                        throw new Exception("Error: Token not recognized!");
+                    }
+
+                case 24:
+                    if(c == '='){
+                        state = 25;
+                        lexeme.append(c);
+                        return new Token("RELOP", "GE");
+                    }else{
+                        state = 26;
+                        retrack();
+                        return new Token("RELOP", "GT");
+                    }
+            }
+            //########################################################################
         }
     }
 
-    private Token installID(String lexem){
+    private Token installID(String lexeme){
         Token token;
 
-        if(keywordTable.containsKey(lexem))
-            return keywordTable.get(lexem);
+        if(keywordTable.containsKey(lexeme))
+            return keywordTable.get(lexeme);
         else{
-            token =  new Token("ID", lexem);
-            stringTable.put(lexem, token);
+            token =  new Token("ID", lexeme);
+            stringTable.put(lexeme, token);
             return token;
         }
     }
 
     private void retrack() throws IOException {
-        reader.unread(1);
+        if (fileInput != null && fileInput.getChannel().position() > 0) {
+            fileInput.getChannel().position(fileInput.getChannel().position() - 1);
+        }
     }
 }
