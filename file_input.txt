@@ -1,0 +1,9 @@
+int x <-- 10
+float y <-- 0.5
+if x != 10 then
+    if y >= 0 then
+        y <-- x
+
+
+
+
